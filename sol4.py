@@ -66,6 +66,7 @@ def sample_descriptor(im, pos, desc_rad):
         temp_y = window_y + pos[i, Y]
         mat = spi.map_coordinates(im, [temp_y, temp_x], order=1, prefilter=False)
         mean = np.average(mat)
+        # TODO: check for zero deviation.
         mat = (mat - mean) / np.linalg.norm(mat - mean)
         return_array[i] = mat
     return return_array
@@ -112,22 +113,30 @@ def match_features(desc1, desc2, min_score):
             if s[i, j] >= s[i, second_max_rows[i]] and s[i, j] >= s[second_max_col[j], j] and s[i, j] > min_score:
                 return_array_d_1.append(i)
                 return_array_d_2.append(j)
-    return np.array(return_array_d_1).astype(np.int32) , np.array(return_array_d_2).astype(np.int32)
-
-
-
-
-
+    return np.array(return_array_d_1).astype(np.int32), np.array(return_array_d_2).astype(np.int32)
 
 
 def apply_homography(pos1, H12):
     """
-  Apply homography to inhomogenous points.
-  :param pos1: An array with shape (N,2) of [x,y] point coordinates.
-  :param H12: A 3x3 homography matrix.
-  :return: An array with the same shape as pos1 with [x,y] point coordinates obtained from transforming pos1 using H12.
-  """
-    pass
+    Apply homography to in homogeneous points.
+    :param pos1: An array with shape (N,2) of [x,y] point coordinates.
+    :param H12: A 3x3 homography matrix.
+    :return: An array with the same shape as pos1 with [x,y] point coordinates obtained from transforming pos1 using H12.
+    """
+    temp_array = np.insert(pos1, 2, 1, axis=1).T
+    new_pos = np.dot(H12, temp_array).T
+    humoungous_vec = new_pos[:, 2]
+    new_pos = new_pos[:, :2] / humoungous_vec.reshape(pos1.shape[0], 1)
+    # n = pos1.shape[0]
+    # my_vec = np.ones((3, 1))
+    # new_pos = np.zeros((n, 2))
+    # for i in range(n):
+    #     my_vec[:2, 0] = pos1[i, :]
+    #     temp_vec = np.dot(H12, my_vec)
+    #     temp_vec /= temp_vec[2, 0]
+    #     new_pos[i] = temp_vec[:2, 0]
+    return new_pos
+
 
 
 def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=False):
