@@ -183,6 +183,7 @@ def display_matches(im1, im2, points1, points2, inliers):
     points2[:, 1] += im1.shape[1]
     points = np.hstack(points1.T, points2.T).T
     plt.plot(points[:, X], points1[:, Y], mfc='r', c='b', lw=.4, ms=10, marker='o')
+    plt.plot(points[inliers][:, X], points1[inliers][:, Y], mfc='y', c='b', lw=.4, ms=10, marker='o')
 
 
 def accumulate_homographies(H_succesive, m):
