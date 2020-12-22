@@ -5,7 +5,7 @@
 import numpy as np
 import os
 import matplotlib.pyplot as plt
-
+import random
 from scipy.ndimage.morphology import generate_binary_structure
 from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage import label, center_of_mass
@@ -125,8 +125,8 @@ def apply_homography(pos1, H12):
     """
     temp_array = np.insert(pos1, 2, 1, axis=1).T
     new_pos = np.dot(H12, temp_array).T
-    humoungous_vec = new_pos[:, 2]
-    new_pos = new_pos[:, :2] / humoungous_vec.reshape(pos1.shape[0], 1)
+    homogeneous_vec = new_pos[:, 2]
+    new_pos = new_pos[:, :2] / homogeneous_vec.reshape(pos1.shape[0], 1)
     # n = pos1.shape[0]
     # my_vec = np.ones((3, 1))
     # new_pos = np.zeros((n, 2))
@@ -138,33 +138,51 @@ def apply_homography(pos1, H12):
     return new_pos
 
 
-
 def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=False):
     """
-  Computes homography between two sets of points using RANSAC.
-  :param pos1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
-  :param pos2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
-  :param num_iter: Number of RANSAC iterations to perform.
-  :param inlier_tol: inlier tolerance threshold.
-  :param translation_only: see estimate rigid transform
-  :return: A list containing:
+    Computes homography between two sets of points using RANSAC.
+    :param pos1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
+    :param pos2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
+    :param num_iter: Number of RANSAC iterations to perform.
+    :param inlier_tol: inlier tolerance threshold.
+    :param translation_only: see estimate rigid transform
+    :return: A list containing:
               1) A 3x3 normalized homography matrix.
               2) An Array with shape (S,) where S is the number of inliers,
                   containing the indices in pos1/pos2 of the maximal set of inlier matches found.
-  """
-    pass
+    """
+    max_inliers = 0
+    best_homography = np.zeros((3, 3))
+    n = points1.shape[0]
+    while num_iter > 0:
+        index = random.randint(0, n - 1)
+        h = estimate_rigid_transform(points1[index, :], points2[index, :], translation_only)
+        new_pos1 = apply_homography(points1, h)
+        e_1 = np.sum(np.abs(new_pos1 - points2) ** 2, axis=1)
+        temp_indexes = np.where(e_1.T < inlier_tol)
+        inliers = len(temp_indexes)
+        if inliers > max_inliers:
+            max_inliers = inliers
+            best_homography = h
+            inliers_indexes = np.array(temp_indexes).T
+        num_iter -= 1
+    return best_homography, inliers_indexes
 
 
 def display_matches(im1, im2, points1, points2, inliers):
     """
-  Dispalay matching points.
-  :param im1: A grayscale image.
-  :param im2: A grayscale image.
-  :parma pos1: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im1.
-  :param pos2: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im2.
-  :param inliers: An array with shape (S,) of inlier matches.
-  """
-    pass
+    Dispalay matching points.
+    :param im1: A grayscale image.
+    :param im2: A grayscale image.
+    :parma pos1: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im1.
+    :param pos2: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im2.
+    :param inliers: An array with shape (S,) of inlier matches.
+    """
+    image = np.hstack(im1, im2)
+    plt.imshow(image)
+    points2[:, 1] += im1.shape[1]
+    points = np.hstack(points1.T, points2.T).T
+    plt.plot(points[:, X], points1[:, Y], mfc='r', c='b', lw=.4, ms=10, marker='o')
 
 
 def accumulate_homographies(H_succesive, m):
