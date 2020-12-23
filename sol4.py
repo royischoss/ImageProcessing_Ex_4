@@ -66,8 +66,11 @@ def sample_descriptor(im, pos, desc_rad):
         temp_y = window_y + pos[i, Y]
         mat = spi.map_coordinates(im, [temp_y, temp_x], order=1, prefilter=False)
         mean = np.average(mat)
-        # TODO: check for zero deviation.
-        mat = (mat - mean) / np.linalg.norm(mat - mean)
+        standard_deviation = np.linalg.norm(mat - mean)
+        if standard_deviation == 0:
+            mat = np.zeros(mat.shape)
+        else:
+            mat = (mat - mean) / standard_deviation
         return_array[i] = mat
     return return_array
 
