@@ -155,8 +155,14 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
     best_homography = np.zeros((3, 3))
     n = points1.shape[0]
     while num_iter > 0:
-        index = random.randint(0, n - 1)
-        h = estimate_rigid_transform(points1[index, :], points2[index, :], translation_only)
+        if translation_only:
+            index = random.randint(0, n - 1)
+            h = estimate_rigid_transform(points1[index, :], points2[index, :], translation_only)
+        else:
+            indexes = random.sample(range(n - 1), 2)
+            temp_points1 = points1[(indexes[0], indexes[1]), :]
+            temp_points2 = points2[(indexes[0], indexes[1]), :]
+            h = estimate_rigid_transform(temp_points1, temp_points2, translation_only)
         new_pos1 = apply_homography(points1, h)
         e_1 = np.sum(np.abs(new_pos1 - points2) ** 2, axis=1)
         temp_indexes = np.where(e_1.T < inlier_tol)
