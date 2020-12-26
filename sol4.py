@@ -103,17 +103,31 @@ def match_features(desc1, desc2, min_score):
     n_2 = desc2.shape[0]
     s = np.zeros((n_1, n_2))
     second_max_rows = []
+    max_col = np.zeros((n_2,))
+    second_max_col = np.zeros((n_2,))
     for i in range(n_1):
-        if i >= 1:
-            second_max_rows.append(np.argsort(s[i - 1, :], axis=1)[-2])
+        # if i >= 1:
+            # second_max_rows.append(np.argsort(s[i - 1, :])[-2])
+        max_1_i, max_2_i = 0, 0
         for j in range(n_2):
             s[i][j] = np.dot(desc1[i].flatten(), desc2[j].flatten())
-    second_max_col = np.argsort(np.max(s.T, axis=1))[:, -2]
+            if s[i][j] > max_1_i:
+                max_2_i = max_1_i
+                max_1_i = s[i][j]
+            elif max_2_i < s[i][j] < max_1_i:
+                max_2_i = s[i][j]
+            if s[i][j] > max_col[j]:
+                second_max_col[j] = max_col[j]
+                max_col[j] = s[i][j]
+            elif second_max_col[j] < s[i][j] < max_col[j]:
+                second_max_col[j] = s[i][j]
+        second_max_rows.append(max_2_i)
+    # second_max_col = np.argsort(s.T, axis=1)[:, -2]
     return_array_d_1 = []
     return_array_d_2 = []
-    for i in range(3):
-        for j in range(2):
-            if s[i, j] >= s[i, second_max_rows[i]] and s[i, j] >= s[second_max_col[j], j] and s[i, j] > min_score:
+    for i in range(n_1):
+        for j in range(n_2):
+            if s[i, j] >= second_max_rows[i] and s[i, j] >= second_max_col[j] and s[i, j] > min_score:
                 return_array_d_1.append(i)
                 return_array_d_2.append(j)
     return np.array(return_array_d_1).astype(np.int32), np.array(return_array_d_2).astype(np.int32)
@@ -169,11 +183,11 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
         new_pos1 = apply_homography(points1, h)
         e_1 = np.sum(np.abs(new_pos1 - points2) ** 2, axis=1)
         temp_indexes = np.where(e_1.T < inlier_tol)
-        inliers = len(temp_indexes)
+        inliers = temp_indexes[0].size
         if inliers > max_inliers:
             max_inliers = inliers
             best_homography = h
-            inliers_indexes = np.array(temp_indexes).T
+            inliers_indexes = np.array(temp_indexes[0]).T
         num_iter -= 1
     return best_homography, inliers_indexes
 
@@ -187,13 +201,13 @@ def display_matches(im1, im2, points1, points2, inliers):
     :param pos2: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im2.
     :param inliers: An array with shape (S,) of inlier matches.
     """
-    image = np.hstack(im1, im2)
-    plt.imshow(image)
+    image = np.hstack((im1, im2))
+    plt.imshow(image, cmap=plt.cm.gray)
     points2[:, 1] += im1.shape[1]
-    points = np.hstack(points1.T, points2.T).T
-    plt.plot(points[:, X], points1[:, Y], mfc='r', c='b', lw=.4, ms=10, marker='o')
-    plt.plot(points[inliers][:, X], points1[inliers][:, Y], mfc='y', c='b', lw=.4, ms=10, marker='o')
-
+    points = np.hstack((points1.T, points2.T)).T
+    plt.plot(points[:, X], points[:, Y], mfc='r', c='b', lw=.4, ms=10, marker='o')
+    plt.plot(points[inliers][:, X], points[inliers][:, Y], mfc='y', c='b', lw=.4, ms=10, marker='o')
+    plt.show()
 
 def accumulate_homographies(H_succesive, m):
     """
@@ -205,7 +219,7 @@ def accumulate_homographies(H_succesive, m):
   :param m: Index of the coordinate system towards which we would like to 
     accumulate the given homographies.
   :return: A list of M 3x3 homography matrices, 
-    where H2m[i] transforms points from coordinate system i to coordinate system m
+    where H2m[i] transforms points from coordinate system i to coordinate system m3
   """
     pass
 
