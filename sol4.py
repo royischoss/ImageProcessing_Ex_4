@@ -55,7 +55,7 @@ def sample_descriptor(im, pos, desc_rad):
     :param desc_rad: "Radius" of descriptors to compute.
     :return: A 3D array with shape (N,K,K) containing the ith descriptor at desc[i,:,:].
       """
-    # pos *= TRANSFORM
+    # pos = pos * TRANSFORM
     k = 1 + 2 * desc_rad
     the_grid = np.indices((k, k))
     window_x = the_grid[1] - int(k / 2)
@@ -85,7 +85,7 @@ def find_features(pyr):
               2) A feature descriptor array with shape (N,K,K)
     """
     harris_points = spread_out_corners(pyr[0], 7, 7, 12)
-    d = sample_descriptor(pyr[2], harris_points, 3)
+    d = sample_descriptor(pyr[2], harris_points * 0.25, 3)
     return harris_points, d
 
 
@@ -102,32 +102,16 @@ def match_features(desc1, desc2, min_score):
     n_1 = desc1.shape[0]
     n_2 = desc2.shape[0]
     s = np.zeros((n_1, n_2))
-    second_max_rows = []
-    max_col = np.zeros((n_2,))
-    second_max_col = np.zeros((n_2,))
     for i in range(n_1):
-        # if i >= 1:
-            # second_max_rows.append(np.argsort(s[i - 1, :])[-2])
-        max_1_i, max_2_i = 0, 0
         for j in range(n_2):
             s[i][j] = np.dot(desc1[i].flatten(), desc2[j].flatten())
-            if s[i][j] > max_1_i:
-                max_2_i = max_1_i
-                max_1_i = s[i][j]
-            elif max_2_i < s[i][j] < max_1_i:
-                max_2_i = s[i][j]
-            if s[i][j] > max_col[j]:
-                second_max_col[j] = max_col[j]
-                max_col[j] = s[i][j]
-            elif second_max_col[j] < s[i][j] < max_col[j]:
-                second_max_col[j] = s[i][j]
-        second_max_rows.append(max_2_i)
-    # second_max_col = np.argsort(s.T, axis=1)[:, -2]
+    second_max_col = np.argsort(s.T, axis=1)[:, -2]
+    second_max_rows = np.argsort(s, axis=1)[:, -2]
     return_array_d_1 = []
     return_array_d_2 = []
     for i in range(n_1):
         for j in range(n_2):
-            if s[i, j] >= second_max_rows[i] and s[i, j] >= second_max_col[j] and s[i, j] > min_score:
+            if s[i, j] >= s[i, second_max_rows[i]] and s[i, j] >= s[second_max_col[j], j] and s[i, j] > min_score:
                 return_array_d_1.append(i)
                 return_array_d_2.append(j)
     return np.array(return_array_d_1).astype(np.int32), np.array(return_array_d_2).astype(np.int32)
@@ -144,14 +128,6 @@ def apply_homography(pos1, H12):
     new_pos = np.dot(H12, temp_array).T
     homogeneous_vec = new_pos[:, 2]
     new_pos = new_pos[:, :2] / homogeneous_vec.reshape(pos1.shape[0], 1)
-    # n = pos1.shape[0]
-    # my_vec = np.ones((3, 1))
-    # new_pos = np.zeros((n, 2))
-    # for i in range(n):
-    #     my_vec[:2, 0] = pos1[i, :]
-    #     temp_vec = np.dot(H12, my_vec)
-    #     temp_vec /= temp_vec[2, 0]
-    #     new_pos[i] = temp_vec[:2, 0]
     return new_pos
 
 
@@ -169,7 +145,7 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
                   containing the indices in pos1/pos2 of the maximal set of inlier matches found.
     """
     max_inliers = 0
-    best_homography = np.zeros((3, 3))
+    inliers_indexes = None
     n = points1.shape[0]
     while num_iter > 0:
         if translation_only:
@@ -180,15 +156,17 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
             temp_points1 = points1[(indexes[0], indexes[1]), :]
             temp_points2 = points2[(indexes[0], indexes[1]), :]
             h = estimate_rigid_transform(temp_points1, temp_points2, translation_only)
+        h /= h[2, 2]
         new_pos1 = apply_homography(points1, h)
-        e_1 = np.sum(np.abs(new_pos1 - points2) ** 2, axis=1)
+        e_1 = np.linalg.norm(new_pos1 - points2, axis=1) ** 2
         temp_indexes = np.where(e_1.T < inlier_tol)
         inliers = temp_indexes[0].size
         if inliers > max_inliers:
             max_inliers = inliers
-            best_homography = h
-            inliers_indexes = np.array(temp_indexes[0]).T
+            inliers_indexes = temp_indexes[0].T.astype(np.int32)
         num_iter -= 1
+    best_homography = estimate_rigid_transform(points1[inliers_indexes, :], points2[inliers_indexes, :],
+                                               translation_only)
     return best_homography, inliers_indexes
 
 
@@ -203,11 +181,12 @@ def display_matches(im1, im2, points1, points2, inliers):
     """
     image = np.hstack((im1, im2))
     plt.imshow(image, cmap=plt.cm.gray)
-    points2[:, 1] += im1.shape[1]
-    points = np.hstack((points1.T, points2.T)).T
-    plt.plot(points[:, X], points[:, Y], mfc='r', c='b', lw=.4, ms=10, marker='o')
-    plt.plot(points[inliers][:, X], points[inliers][:, Y], mfc='y', c='b', lw=.4, ms=10, marker='o')
+    points2[:, 0] += im1.shape[1]
+    plt.plot([points1[:, X], points2[:, X]], [points1[:, Y], points2[:, Y]], mfc='r', c='b', lw=.4, ms=3, marker='o')
+    plt.plot([points1[inliers, X], points2[inliers, X]], [points1[inliers, Y], points2[inliers, Y]], mfc='r', c='y',
+             lw=.6, ms=4, marker='o')
     plt.show()
+
 
 def accumulate_homographies(H_succesive, m):
     """
