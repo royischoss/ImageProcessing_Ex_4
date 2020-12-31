@@ -1,7 +1,7 @@
 # Initial code for ex4.
 # You may change this code, but keep the functions' signatures
 # You can also split the code to multiple files as long as this file's API is unchanged 
-
+# ---------------------------  imports   ---------------------------------------------
 import numpy as np
 import os
 import matplotlib.pyplot as plt
@@ -13,15 +13,24 @@ import shutil
 from imageio import imwrite
 import scipy.ndimage as spi
 from scipy import signal
-
 import sol4_utils
 
+# --------------------------- constants -----------------------------------------------
+WINDOW_WIDTH = 7
+WINDOW_LENGTH = 7
+RADIUS_FOR_SPREAD = 12
 K = 0.04
 DERIVATIVE = [1, 0, -1]
 SIZE_FILTER = 3
 Y = 1
 X = 0
-TRANSFORM = 1 / 4
+TRANSFORM_PYR_COORDINATES = 0.25
+DESC_RADIUS = 3
+
+
+# -------------------------- functions -----------------------------------------------
+
+# ----------------------------- 3.1 --------------------------------------------------
 
 
 def harris_corner_detector(im):
@@ -84,10 +93,12 @@ def find_features(pyr):
                  These coordinates are provided at the pyramid level pyr[0].
               2) A feature descriptor array with shape (N,K,K)
     """
-    harris_points = spread_out_corners(pyr[0], 7, 7, 12)
-    d = sample_descriptor(pyr[2], harris_points * 0.25, 3)
+    harris_points = spread_out_corners(pyr[0], WINDOW_LENGTH, WINDOW_WIDTH, RADIUS_FOR_SPREAD)
+    d = sample_descriptor(pyr[2], harris_points * TRANSFORM_PYR_COORDINATES, DESC_RADIUS)
     return harris_points, d
 
+
+# ----------------------------- 3.2 -------------------------------------------------
 
 def match_features(desc1, desc2, min_score):
     """
@@ -117,6 +128,9 @@ def match_features(desc1, desc2, min_score):
     return np.array(return_array_d_1).astype(np.int32), np.array(return_array_d_2).astype(np.int32)
 
 
+# ----------------------------- 3.3 -----------------------------------------------
+
+
 def apply_homography(pos1, H12):
     """
     Apply homography to in homogeneous points.
@@ -134,8 +148,8 @@ def apply_homography(pos1, H12):
 def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=False):
     """
     Computes homography between two sets of points using RANSAC.
-    :param pos1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
-    :param pos2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
+    :param points1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
+    :param points2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
     :param num_iter: Number of RANSAC iterations to perform.
     :param inlier_tol: inlier tolerance threshold.
     :param translation_only: see estimate rigid transform
@@ -175,8 +189,8 @@ def display_matches(im1, im2, points1, points2, inliers):
     Dispalay matching points.
     :param im1: A grayscale image.
     :param im2: A grayscale image.
-    :parma pos1: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im1.
-    :param pos2: An aray shape (N,2), containing N rows of [x,y] coordinates of matched points in im2.
+    :param points1: An array shape (N,2), containing N rows of [x,y] coordinates of matched points in im1.
+    :param points2: An array shape (N,2), containing N rows of [x,y] coordinates of matched points in im2.
     :param inliers: An array with shape (S,) of inlier matches.
     """
     image = np.hstack((im1, im2))
@@ -188,41 +202,72 @@ def display_matches(im1, im2, points1, points2, inliers):
     plt.show()
 
 
+# ----------------------------- 3.4 -----------------------------------------------
+
+
 def accumulate_homographies(H_succesive, m):
     """
-  Convert a list of succesive homographies to a 
-  list of homographies to a common reference frame.
-  :param H_successive: A list of M-1 3x3 homography 
+    Convert a list of succesive homographies to a
+    list of homographies to a common reference frame.
+    :param H_successive: A list of M-1 3x3 homography
     matrices where H_successive[i] is a homography which transforms points
     from coordinate system i to coordinate system i+1.
-  :param m: Index of the coordinate system towards which we would like to 
+    :param m: Index of the coordinate system towards which we would like to
     accumulate the given homographies.
-  :return: A list of M 3x3 homography matrices, 
+    :return: A list of M 3x3 homography matrices,
     where H2m[i] transforms points from coordinate system i to coordinate system m3
-  """
-    pass
+    """
+    returned_matrix = [np.empty((3, 3))] * len(H_succesive)
+    returned_matrix[m] = np.eye(3)
+    for i in range(m - 1, -1, -1):
+        returned_matrix[i] = np.dot(returned_matrix[i + 1], H_succesive[i])
+        returned_matrix[i] /= returned_matrix[i][2, 2]
+    for i in range(m + 1, len(H_succesive)):
+        returned_matrix[i] = np.dot(returned_matrix[i - 1], np.linalg.inv(H_succesive[i]))
+        returned_matrix[i] /= returned_matrix[i][2, 2]
+    return returned_matrix
+
+
+# ----------------------------- 4.1 -----------------------------------------------
 
 
 def compute_bounding_box(homography, w, h):
     """
-  computes bounding box of warped image under homography, without actually warping the image
-  :param homography: homography
-  :param w: width of the image
-  :param h: height of the image
-  :return: 2x2 array, where the first row is [x,y] of the top left corner,
-   and the second row is the [x,y] of the bottom right corner
-  """
-    pass
+    computes bounding box of warped image under homography, without actually warping the image
+    :param homography: homography
+    :param w: width of the image
+    :param h: height of the image
+    :return: 2x2 array, where the first row is [x,y] of the top left corner,
+    and the second row is the [x,y] of the bottom right corner
+    """
+    four_corners = np.array([[0, 0],
+                             [0, w],
+                             [h, 0],
+                             [h, w]])
+    temp_corners = apply_homography(four_corners, homography)
+    max_y = np.max(temp_corners[:, Y])
+    min_y = np.min(temp_corners[:, Y])
+    max_x = np.max(temp_corners[:, X])
+    min_x = np.min(temp_corners[:, X])
+    return np.array([[min_x, min_y],
+                     [max_x, max_y]]).astype(np.int32)
 
 
 def warp_channel(image, homography):
     """
-  Warps a 2D image with a given homography.
-  :param image: a 2D image.
-  :param homography: homograhpy.
-  :return: A 2d warped image.
-  """
-    pass
+    Warps a 2D image with a given homography.
+    :param image: a 2D image.
+    :param homography: homograhpy.
+    :return: A 2d warped image.
+    """
+    inverse_homography = np.linalg.inv(homography)
+    corner_points = compute_bounding_box(homography, image.shape[1], image.shape[0])
+    grid_x, grid_y = np.meshgrid(np.arange(corner_points[0, 0], corner_points[1, 0], 1), np.arange(corner_points[0, 1],
+                                                                                                   corner_points[1, 1],
+                                                                                                   1))
+    points = np.array([grid_x.flatten(), grid_y.flatten()]).T
+    new_points = apply_homography(points, inverse_homography)
+    return spi.map_coordinates([new_points[:, Y], new_points[:, X]], order=1, prefilter=False)
 
 
 def warp_image(image, homography):
