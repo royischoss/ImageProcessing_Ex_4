@@ -159,11 +159,12 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
     """
     max_inliers = 0
     inliers_indexes = None
+    if translation_only:
+        rand_points = 1
+    else:
+        rand_points = 2
     while num_iter > 0:
-        if translation_only:
-            index = np.random.permutation(points1.shape[0])[:1]
-        else:
-            index = np.random.permutation(points1.shape[0])[:2]
+        index = np.random.permutation(points1.shape[0])[:rand_points]
         temp_points1 = points1[index, :]
         temp_points2 = points2[index, :]
         h = estimate_rigid_transform(temp_points1, temp_points2, translation_only)
@@ -180,40 +181,6 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
                                                translation_only)
     best_homography /= best_homography[2, 2]
     return best_homography, inliers_indexes
-
-# def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=False):
-#     """
-#     Computes homography between two sets of points using RANSAC.
-#     :param pos1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
-#     :param pos2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
-#     :param num_iter: Number of RANSAC iterations to perform.
-#     :param inlier_tol: inlier tolerance threshold.
-#     :param translation_only: see estimate rigid transform
-#     :return: A list containing:
-#                 1) A 3x3 normalized homography matrix.
-#                 2) An Array with shape (S,) where S is the number of inliers,
-#                     containing the indices in pos1/pos2 of the maximal set of inlier matches found.
-#     """
-#     num_of_point = 2
-#     if (translation_only):
-#         num_of_point = 1
-#     inliers = np.zeros(0)
-#
-#     for i in range(num_iter):
-#         indexes = np.random.permutation(points1.shape[0])[:num_of_point]
-#         p1 = points1[indexes, :]
-#         p2 = points2[indexes, :]
-#         H12 = estimate_rigid_transform(p1, p2, translation_only)
-#         H12 /= H12[2, 2]
-#         p2_after_homo = apply_homography(points1, H12)
-#         error = np.linalg.norm(p2_after_homo - points2, axis=1) ** 2
-#         inliers_temp = np.where(error < inlier_tol)[0]
-#         if (inliers_temp.shape[0] > inliers.shape[0]):
-#             inliers = inliers_temp
-#     H12 = estimate_rigid_transform(points1[inliers, :], points2[inliers, :], translation_only)
-#     H12 /= H12[2, 2]
-#     return [H12, inliers]
-
 
 def display_matches(im1, im2, points1, points2, inliers):
     """
