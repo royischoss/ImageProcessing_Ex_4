@@ -112,10 +112,9 @@ def match_features(desc1, desc2, min_score):
     """
     n_1 = desc1.shape[0]
     n_2 = desc2.shape[0]
-    s = np.zeros((n_1, n_2))
-    for i in range(n_1):
-        for j in range(n_2):
-            s[i][j] = np.dot(desc1[i].flatten(), desc2[j].flatten())
+    desc1_reshaped = desc1.reshape(n_1, desc1.shape[1] ** 2)
+    desc2_reshaped = desc2.reshape(n_2, desc2.shape[1] ** 2)
+    s = desc1_reshaped @ desc2_reshaped.T
     second_max_col = np.argsort(s.T, axis=1)[:, -2]
     second_max_rows = np.argsort(s, axis=1)[:, -2]
     return_array_d_1 = []
@@ -160,28 +159,60 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
     """
     max_inliers = 0
     inliers_indexes = None
-    n = points1.shape[0]
     while num_iter > 0:
         if translation_only:
-            index = random.randint(0, n - 1)
-            h = estimate_rigid_transform(points1[index, :], points2[index, :], translation_only)
+            index = np.random.permutation(points1.shape[0])[:1]
         else:
-            indexes = random.sample(range(n - 1), 2)
-            temp_points1 = points1[(indexes[0], indexes[1]), :]
-            temp_points2 = points2[(indexes[0], indexes[1]), :]
-            h = estimate_rigid_transform(temp_points1, temp_points2, translation_only)
+            index = np.random.permutation(points1.shape[0])[:2]
+        temp_points1 = points1[index, :]
+        temp_points2 = points2[index, :]
+        h = estimate_rigid_transform(temp_points1, temp_points2, translation_only)
         h /= h[2, 2]
         new_pos1 = apply_homography(points1, h)
         e_1 = np.linalg.norm(new_pos1 - points2, axis=1) ** 2
-        temp_indexes = np.where(e_1.T < inlier_tol)
-        inliers = temp_indexes[0].size
+        temp_indexes = np.where(e_1 < inlier_tol)[0]
+        inliers = temp_indexes.shape[0]
         if inliers > max_inliers:
             max_inliers = inliers
-            inliers_indexes = temp_indexes[0].T.astype(np.int32)
+            inliers_indexes = temp_indexes.astype(np.int32)
         num_iter -= 1
     best_homography = estimate_rigid_transform(points1[inliers_indexes, :], points2[inliers_indexes, :],
                                                translation_only)
+    best_homography /= best_homography[2, 2]
     return best_homography, inliers_indexes
+
+# def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=False):
+#     """
+#     Computes homography between two sets of points using RANSAC.
+#     :param pos1: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 1.
+#     :param pos2: An array with shape (N,2) containing N rows of [x,y] coordinates of matched points in image 2.
+#     :param num_iter: Number of RANSAC iterations to perform.
+#     :param inlier_tol: inlier tolerance threshold.
+#     :param translation_only: see estimate rigid transform
+#     :return: A list containing:
+#                 1) A 3x3 normalized homography matrix.
+#                 2) An Array with shape (S,) where S is the number of inliers,
+#                     containing the indices in pos1/pos2 of the maximal set of inlier matches found.
+#     """
+#     num_of_point = 2
+#     if (translation_only):
+#         num_of_point = 1
+#     inliers = np.zeros(0)
+#
+#     for i in range(num_iter):
+#         indexes = np.random.permutation(points1.shape[0])[:num_of_point]
+#         p1 = points1[indexes, :]
+#         p2 = points2[indexes, :]
+#         H12 = estimate_rigid_transform(p1, p2, translation_only)
+#         H12 /= H12[2, 2]
+#         p2_after_homo = apply_homography(points1, H12)
+#         error = np.linalg.norm(p2_after_homo - points2, axis=1) ** 2
+#         inliers_temp = np.where(error < inlier_tol)[0]
+#         if (inliers_temp.shape[0] > inliers.shape[0]):
+#             inliers = inliers_temp
+#     H12 = estimate_rigid_transform(points1[inliers, :], points2[inliers, :], translation_only)
+#     H12 /= H12[2, 2]
+#     return [H12, inliers]
 
 
 def display_matches(im1, im2, points1, points2, inliers):
@@ -241,9 +272,9 @@ def compute_bounding_box(homography, w, h):
     and the second row is the [x,y] of the bottom right corner
     """
     four_corners = np.array([[0, 0],
-                             [0, w],
-                             [h, 0],
-                             [h, w]])
+                             [w - 1, 0],
+                             [0, h - 1],
+                             [w - 1, h - 1]])
     temp_corners = apply_homography(four_corners, homography)
     max_y = np.max(temp_corners[:, Y])
     min_y = np.min(temp_corners[:, Y])
