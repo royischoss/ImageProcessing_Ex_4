@@ -182,6 +182,7 @@ def ransac_homography(points1, points2, num_iter, inlier_tol, translation_only=F
     best_homography /= best_homography[2, 2]
     return best_homography, inliers_indexes
 
+
 def display_matches(im1, im2, points1, points2, inliers):
     """
     Dispalay matching points.
