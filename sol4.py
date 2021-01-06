@@ -216,15 +216,14 @@ def accumulate_homographies(H_succesive, m):
     :return: A list of M 3x3 homography matrices,
     where H2m[i] transforms points from coordinate system i to coordinate system m3
     """
-    returned_matrix = [np.empty((3, 3))] * (len(H_succesive) + 1)
-    returned_matrix[m] = np.eye(3)
+    H_succesive.insert(m, np.eye(3))
     for i in range(m - 1, -1, -1):
-        returned_matrix[i] = np.dot(returned_matrix[i + 1], H_succesive[i])
-        returned_matrix[i] /= returned_matrix[i][2, 2]
-    for i in range(m + 1, len(returned_matrix)):
-        returned_matrix[i] = np.dot(returned_matrix[i - 1], np.linalg.inv(H_succesive[i]))
-        returned_matrix[i] /= returned_matrix[i][2, 2]
-    return returned_matrix
+        H_succesive[i] = np.dot(H_succesive[i + 1], H_succesive[i])
+        H_succesive[i] /= H_succesive[i][2, 2]
+    for i in range(m + 1, len(H_succesive)):
+        H_succesive[i] = np.dot(H_succesive[i - 1], np.linalg.inv(H_succesive[i]))
+        H_succesive[i] /= H_succesive[i][2, 2]
+    return H_succesive
 
 
 # ----------------------------- 4.1 -----------------------------------------------
