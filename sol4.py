@@ -266,7 +266,7 @@ def warp_channel(image, homography):
                                                                                                    1))
     points = np.array([grid_x.flatten(), grid_y.flatten()]).T
     new_points = apply_homography(points, inverse_homography)
-    return spi.map_coordinates(image, [new_points.T[1, :],new_points.T[0, :]], order=1, prefilter=False)\
+    return spi.map_coordinates(image, [new_points.T[1, :], new_points.T[0, :]], order=1, prefilter=False)\
         .reshape((corner_points[1][1] - corner_points[0][1], corner_points[1][0] - corner_points[0][0]))
 
 
