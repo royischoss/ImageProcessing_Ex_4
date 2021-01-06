@@ -221,7 +221,7 @@ def accumulate_homographies(H_succesive, m):
     for i in range(m - 1, -1, -1):
         returned_matrix[i] = np.dot(returned_matrix[i + 1], H_succesive[i])
         returned_matrix[i] /= returned_matrix[i][2, 2]
-    for i in range(m + 1, len(H_succesive) + 1):
+    for i in range(m + 1, len(returned_matrix)):
         returned_matrix[i] = np.dot(returned_matrix[i - 1], np.linalg.inv(H_succesive[i]))
         returned_matrix[i] /= returned_matrix[i][2, 2]
     return returned_matrix
