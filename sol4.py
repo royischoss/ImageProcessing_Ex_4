@@ -249,7 +249,7 @@ def compute_bounding_box(homography, w, h):
     max_x = np.max(temp_corners[:, X])
     min_x = np.min(temp_corners[:, X])
     return np.array([[min_x, min_y],
-                     [max_x, max_y]]).astype(np.int32)
+                     [max_x, max_y]]).astype(np.int)
 
 
 def warp_channel(image, homography):
